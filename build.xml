@@ -166,6 +166,16 @@
             <resources refid="deps.fileset" />
             <mapper type="flatten" />
         </copy>
+    	
+    	<copy todir="${lib.dir}">
+            <fileset file="c:/tmp/needle-compiler-0.0.2.jar" />
+            <fileset file="c:/tmp/needle-types-0.0.2.jar" />
+        </copy>
+    	
+    	<copy todir="${lib-build.dir}">
+            <fileset file="c:/tmp/needle-compiler-0.0.2.jar" />
+            <fileset file="c:/tmp/needle-types-0.0.2.jar" />
+        </copy>
 
         <property name="deps.copied" value="true" />
     </target>
@@ -316,6 +326,8 @@
         <copy todir="${build.lib.dir}">
             <fileset dir="${lib.dir}" includes="*.jar" />
             <fileset file="${build.dir}/${jar.name}" />
+            <fileset file="c:/tmp/needle-compiler-0.0.2.jar" />
+            <fileset file="c:/tmp/needle-types-0.0.2.jar" />
         </copy>
 
         <zip zipfile="${build.doc.dir}/${api.doc.file.name}.zip">
