@@ -15,9 +15,10 @@
  */
 package com.xceptance.xlt.report.mergerules;
 
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.MatchResult;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import com.justinblank.strings.DFACompiler;
+import com.justinblank.strings.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
 
@@ -39,12 +40,15 @@ public abstract class AbstractPatternRequestFilter extends AbstractRequestFilter
     /**
      * Just a place holder for a NULL
      */
-    private static final MatchResult NULL = Pattern.compile(".*").matcher("null").toMatchResult();
+    private static final MatchResult NULL = java.util.regex.Pattern.compile(".*").matcher(StringUtils.EMPTY).toMatchResult();
+    
+    private static final ConcurrentHashMap<String, Pattern> needlePatternCache = new ConcurrentHashMap<>(300);
 
     /**
      * The matcher we use when we don't want to cache anything
      */
-    private final Matcher matcher;
+    private final java.util.regex.Matcher matcher;
+    private final com.justinblank.strings.Pattern needlePattern;
 
     /**
      * Whether or not this is an exclusion rule.
@@ -79,8 +83,19 @@ public abstract class AbstractPatternRequestFilter extends AbstractRequestFilter
     {
         super(typeCode);
 
-        this.matcher = StringUtils.isBlank(regex) ? null : RegExUtils.getPattern(regex, 0).matcher("any");
+        if(StringUtils.isBlank(regex))
+        {
+            this.matcher = null;
+            this.needlePattern = null;
+        }
+        else
+        {
+            this.matcher = RegExUtils.getPattern(regex, 0).matcher("any");
+            needlePattern = needlePatternCache.computeIfAbsent(regex, r -> DFACompiler.compile(regex, ""+regex.hashCode()));
+        }
+
         this.isExclude = exclude;
+        
         this.cache = cacheSize > 0 ? new LRUFastHashMap<>(cacheSize) : null;
     }
 
@@ -110,25 +125,25 @@ public abstract class AbstractPatternRequestFilter extends AbstractRequestFilter
         // a lot of time
         if (cache == null)
         {
-            // reuse our matcher and save memory
-            final Matcher m = this.matcher.reset(text);
+            // Needle is used to check for a match in general. Java matcher is returned for further use.
 
             // when we return the matcher, it will be evaluated instantly and
             // hence is reuseable during the next call, this saves memory
             // because a matcher is large
-            return (m.find() ^ isExclude) ? m : null;
+            return (needlePattern.matcher(text.toString()).matches() ^ isExclude) ? this.matcher.reset(text) : null;
         }
         else
         {
             MatchResult result = this.cache.get(text);
             if (result == null)
             {
-                // not found, produce and cache, recycle the matcher
-                // cache only the result, not the matcher itself
-                final Matcher m = this.matcher.reset(text);
-
-                if (m.find() ^ isExclude)
+                // not found, produce and cache
+                if (this.needlePattern.matcher(text.toString()).matches() ^ isExclude)
                 {
+                    // recycle the matcher
+                    // cache only the result, not the matcher itself
+                    final java.util.regex.Matcher m = this.matcher.reset(text);
+                    
                     // we don't cache the matcher but the result which is immutable
                     result = m.toMatchResult();
                     cache.put(text, result);
